@@ -1,0 +1,77 @@
+  GNU nano 7.2                                                                                                    docker-compose.yml                                                                                                             
+version: "3"
+services:
+
+  outline:
+    image: outlinewiki/outline
+    environment:
+      - DATABASE_URL=postgres://yobi:yobi_Dmin@postgres:5432/yobi
+      - DATABASE_URL_TEST=postgres://yobi:yobi_Dmin@postgres:5432/yobi-test
+      - REDIS_URL=redis://redis:6379
+    env_file: ./docker.env
+    volumes:
+      - storage-data:/var/lib/outline/data
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+
+  redis:
+    image: redis
+    env_file: ./docker.env
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis.conf:/redis.conf
+    command: ["redis-server", "/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 3
+
+  postgres:
+    image: postgres
+    env_file: ./docker.env
+    environment:
+      POSTGRES_USER: yobi
+      POSTGRES_PASSWORD: yobi_Dmin
+      POSTGRES_DB: yobi
+    ports:
+      - "5432:5432"
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready -U yobi"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  https-portal:
+    image: steveltn/https-portal
+    env_file: ./docker.env
+    environment:
+      STAGE: production
+      PROXY_READ_TIMEOUT: 3600
+      DOMAINS: 'outline.yib.io -> http://outline:3000'
+      CLIENT_MAX_BODY_SIZE: '100M'
+      WEBSOCKET: 'true'
+    ports:
+      - '80:80'
+      - '443:443'
+    links:
+      - outline
+    restart: always
+    volumes:
+      - https-portal-data:/var/lib/https-portal
+    healthcheck:
+      test: ["CMD", "service", "nginx", "status"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  https-portal-data:
+  storage-data:
+  database-data:
